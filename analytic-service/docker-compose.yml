@@ -1,0 +1,65 @@
+services:
+  db:
+    image: postgres:17
+    container_name: ecommerce-db
+    environment:
+      POSTGRES_DB: ecommerce_db
+      POSTGRES_USER: ecommerce_user
+      POSTGRES_PASSWORD: 12345
+    # ports:
+    #   - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ecommerce_user -d ecommerce_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+
+  web:
+    build: .
+    container_name: ecommerce-web
+    command: bash -c "./entrypoint.sh"
+    # ports:
+    #   - "8004:8000"
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - internal_net
+      - shared_network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.analytic-admin.rule=Host(`analytic-admin.localhost`)"
+      - "traefik.http.routers.analytic-admin.entrypoints=web"
+      - "traefik.http.routers.analytic-admin.service=analytic-web-service"
+      - "traefik.http.services.analytic-web-service.loadbalancer.server.port=8000"
+
+  analytic_celery_worker:
+    build: .
+    container_name: analytic_celery_worker
+    env_file:
+      - .env
+    entrypoint: ""
+    command: celery -A config.celery_app worker --loglevel=info --concurrency=1 -Q analytics
+    networks:
+      - shared_network
+
+
+networks:
+  internal_net:
+    driver: bridge
+  shared_network:
+    external: true
+    name: shared_network
+
+
+volumes:
+  postgres_data:

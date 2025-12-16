@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  gateway_service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: gateway_service
+    command: ["sh", "/app/entrypoint.sh"]
+    # ports:
+    #   - "8002:8080"
+    env_file:
+      - .env
+    working_dir: /app
+    volumes:
+      - ./gateway:/app/gateway:rw
+      - ./uv.lock:/app/uv.lock:rw
+      - ./pyproject.toml:/app/pyproject.toml:rw
+      - ./.cache/uv:/home/appuser/.cache/uv
+      - ./logs:/app/logs:rw  
+    restart: unless-stopped
+    networks:
+      - shared_network
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.gateway.rule=Host(`gateway.localhost`)"
+      - "traefik.http.routers.gateway.entrypoints=web"
+      - "traefik.http.services.gateway.loadbalancer.server.port=8080"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  shared_network:
+    external: true
